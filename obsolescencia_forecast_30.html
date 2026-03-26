@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Obsolescencia vs Forecast</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@300;400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+:root{
+  --bg:#070809;--s1:#0c0e10;--s2:#111417;--s3:#181c20;
+  --border:#1f2428;--border2:#272d33;
+  --ok:#00c896;--warn:#ffb547;--danger:#ff4d6d;--info:#4d9eff;--purple:#b57bff;
+  --text:#cdd5e0;--dim:#4a5568;--mid:#718096;--r:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-weight:300;min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(rgba(255,255,255,0.04) 1px,transparent 1px);background-size:28px 28px;pointer-events:none;z-index:0;}
+.page{position:relative;z-index:1;max-width:1440px;margin:0 auto;padding:0 20px 40px;}
+
+header{padding:24px 0 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+.h-left{display:flex;flex-direction:column;gap:4px;}
+.h-eyebrow{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--dim);letter-spacing:2.5px;text-transform:uppercase;}
+h1{font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:1px;line-height:1;}
+h1 span{color:var(--danger);}
+.h-right{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.hbadge{padding:5px 12px;border-radius:100px;font-family:'IBM Plex Mono',monospace;font-size:10px;border:1px solid;}
+.hbadge.vida{background:rgba(255,77,109,0.08);border-color:rgba(255,77,109,0.25);color:var(--danger);}
+.hbadge.freq{background:rgba(77,158,255,0.08);border-color:rgba(77,158,255,0.25);color:var(--info);}
+
+/* UPLOAD */
+.upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0;}
+.upload-card{background:var(--s1);border:1.5px dashed var(--border2);border-radius:12px;padding:20px;position:relative;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;gap:10px;}
+.upload-card:hover,.upload-card.over{border-color:var(--info);background:rgba(77,158,255,0.04);}
+.upload-card.loaded{border-style:solid;border-color:var(--ok);background:rgba(0,200,150,0.04);}
+.upload-card input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.uc-top{display:flex;align-items:center;gap:10px;}
+.uc-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;background:var(--s3);flex-shrink:0;}
+.uc-label h3{font-size:13px;font-weight:600;color:var(--text);}
+.uc-label p{font-size:11px;color:var(--dim);font-family:'IBM Plex Mono',monospace;}
+.uc-hint{font-size:11px;color:var(--mid);background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-family:'IBM Plex Mono',monospace;line-height:1.6;}
+.uc-status{display:none;align-items:center;gap:6px;font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--ok);}
+.upload-card.loaded .uc-status{display:flex;}
+.uc-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);}
+.map-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;margin-top:6px;}
+.map-arrow{color:var(--dim);font-size:12px;text-align:center;}
+.map-label{font-size:10px;color:var(--dim);font-family:'IBM Plex Mono',monospace;margin-bottom:3px;}
+select.map-sel{width:100%;background:var(--s2);border:1px solid var(--border2);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11px;padding:5px 8px;border-radius:5px;outline:none;cursor:pointer;}
+select.map-sel:focus{border-color:var(--info);}
+
+/* RUN */
+.run-bar{display:flex;justify-content:center;gap:12px;margin:4px 0 24px;flex-wrap:wrap;}
+.btn-run{background:linear-gradient(135deg,var(--danger),#ff6b8a);color:#fff;border:none;padding:13px 40px;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:10px;}
+.btn-run:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(255,77,109,0.3);}
+.btn-run:disabled{background:var(--s3);color:var(--dim);cursor:not-allowed;transform:none;box-shadow:none;}
+.btn-excel{background:linear-gradient(135deg,#1D6F42,#2e9e63);color:#fff;border:none;padding:13px 28px;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;cursor:pointer;transition:all 0.2s;display:none;align-items:center;gap:10px;}
+.btn-excel:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(29,111,66,0.35);}
+
+/* KPI */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;}
+.kpi{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:4px;animation:fadeUp 0.4s ease both;}
+.kpi:nth-child(2){animation-delay:.07s}.kpi:nth-child(3){animation-delay:.14s}.kpi:nth-child(4){animation-delay:.21s}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.kpi-label{font-size:9px;color:var(--dim);font-family:'IBM Plex Mono',monospace;letter-spacing:1.5px;text-transform:uppercase;}
+.kpi-value{font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:0.5px;line-height:1;}
+.kpi-sub{font-size:11px;color:var(--mid);}
+.kpi.danger .kpi-value{color:var(--danger);}
+.kpi.warn .kpi-value{color:var(--warn);}
+.kpi.ok .kpi-value{color:var(--ok);}
+.kpi.info .kpi-value{color:var(--info);}
+
+/* CHARTS */
+.analysis-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;}
+.panel{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;animation:fadeUp 0.4s ease both;}
+.panel.d1{animation-delay:.1s}.panel.d2{animation-delay:.2s}
+.panel-head{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.panel-title{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--mid);letter-spacing:2px;text-transform:uppercase;}
+.panel-body{padding:16px;}
+
+/* CENTRO TABLE */
+.centro-section{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);margin-bottom:24px;overflow:hidden;animation:fadeUp 0.4s ease 0.15s both;}
+.section-head{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+.section-title{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--mid);letter-spacing:2px;text-transform:uppercase;}
+.tbl-scroll{overflow-x:auto;}
+.tbl-scroll::-webkit-scrollbar{height:4px;width:4px;}.tbl-scroll::-webkit-scrollbar-thumb{background:var(--border2);}
+table.ctbl{width:100%;border-collapse:collapse;font-size:12px;}
+.ctbl thead{background:var(--s2);}
+.ctbl th{padding:9px 13px;text-align:left;color:var(--mid);font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;font-weight:400;border-bottom:1px solid var(--border);white-space:nowrap;}
+.ctbl td{padding:8px 13px;border-bottom:1px solid var(--border);white-space:nowrap;}
+.ctbl tbody tr:hover td{background:rgba(255,255,255,0.02);}
+.ctbl tfoot td{padding:9px 13px;border-top:2px solid var(--border2);font-weight:600;background:var(--s2);}
+.c-name{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text);font-weight:500;}
+.mini-bar-bg{height:5px;background:var(--s3);border-radius:3px;min-width:70px;position:relative;overflow:hidden;display:inline-block;vertical-align:middle;}
+.mini-bar-fill{height:5px;border-radius:3px;position:absolute;left:0;top:0;}
+
+/* DETAIL TABLE */
+.detail-section{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);margin-bottom:24px;overflow:hidden;animation:fadeUp 0.4s ease 0.3s both;}
+.filter-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.filter-btn{padding:5px 12px;border-radius:100px;font-size:11px;font-family:'IBM Plex Mono',monospace;border:1px solid var(--border2);background:var(--s2);color:var(--mid);cursor:pointer;transition:all 0.15s;}
+.filter-btn.a-all{border-color:var(--info);color:var(--info);background:rgba(77,158,255,0.08);}
+.filter-btn.a-danger{border-color:var(--danger);color:var(--danger);background:rgba(255,77,109,0.08);}
+.filter-btn.a-warn{border-color:var(--warn);color:var(--warn);background:rgba(255,181,71,0.08);}
+.filter-btn.a-ok{border-color:var(--ok);color:var(--ok);background:rgba(0,200,150,0.08);}
+.sep{width:1px;height:18px;background:var(--border2);flex-shrink:0;}
+.centro-chip{padding:5px 11px;border-radius:100px;font-size:10px;font-family:'IBM Plex Mono',monospace;border:1px solid var(--border2);background:var(--s2);color:var(--mid);cursor:pointer;transition:all 0.15s;white-space:nowrap;}
+.centro-chip:hover{border-color:var(--purple);color:var(--purple);}
+.centro-chip.active{border-color:var(--purple);color:var(--purple);background:rgba(181,123,255,0.08);}
+.centro-chip.all-c.active{border-color:var(--info);color:var(--info);background:rgba(77,158,255,0.08);}
+table.rtbl{width:100%;border-collapse:collapse;font-size:12px;}
+.rtbl thead{position:sticky;top:0;z-index:2;background:var(--s2);}
+.rtbl th{padding:9px 13px;text-align:left;color:var(--mid);font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;font-weight:400;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;}
+.rtbl th:hover{color:var(--text);}
+.rtbl td{padding:7px 13px;border-bottom:1px solid var(--border);color:var(--mid);white-space:nowrap;}
+.rtbl tbody tr:hover td{background:rgba(255,255,255,0.02);color:var(--text);}
+.max-h{max-height:400px;overflow-y:auto;}
+.pill{padding:2px 8px;border-radius:100px;font-size:10px;font-family:'IBM Plex Mono',monospace;font-weight:500;}
+.pill.danger{background:rgba(255,77,109,0.15);color:var(--danger);}
+.pill.warn{background:rgba(255,181,71,0.15);color:var(--warn);}
+.pill.ok{background:rgba(0,200,150,0.15);color:var(--ok);}
+.vd{color:var(--danger);font-weight:500;}.vw{color:var(--warn);}.vo{color:var(--ok);}.vi{color:var(--info);}.vp{color:var(--purple);}
+
+/* CHAT */
+.chat-section{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;animation:fadeUp 0.4s ease 0.35s both;}
+.chat-head{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+.chat-head-title{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--mid);letter-spacing:2px;text-transform:uppercase;}
+.alive-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.25}}
+.chat-msgs{height:260px;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;}
+.chat-msgs::-webkit-scrollbar{width:3px;}.chat-msgs::-webkit-scrollbar-thumb{background:var(--border2);}
+.msg{display:flex;flex-direction:column;gap:3px;animation:fadeUp 0.2s ease;}
+.msg.user{align-items:flex-end;}.msg.agent{align-items:flex-start;}
+.msg-who{font-size:9px;color:var(--dim);font-family:'IBM Plex Mono',monospace;letter-spacing:1px;}
+.bub{padding:9px 13px;border-radius:9px;font-size:12.5px;line-height:1.65;max-width:92%;}
+.msg.user .bub{background:rgba(77,158,255,0.1);border:1px solid rgba(77,158,255,0.2);color:var(--text);border-bottom-right-radius:3px;}
+.msg.agent .bub{background:var(--s2);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:3px;}
+.bub strong{color:var(--warn);font-weight:500;}.bub em{color:var(--mid);}
+.bub code{background:var(--s3);padding:1px 5px;border-radius:3px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ok);}
+.thinking-b{display:flex;align-items:center;gap:8px;padding:9px 13px;background:var(--s2);border:1px solid var(--border);border-radius:9px;border-bottom-left-radius:3px;font-size:11px;color:var(--dim);font-family:'IBM Plex Mono',monospace;}
+.dots span{display:inline-block;width:4px;height:4px;border-radius:50%;background:var(--warn);margin:0 2px;animation:bounce 1.2s infinite;}
+.dots span:nth-child(2){animation-delay:.2s}.dots span:nth-child(3){animation-delay:.4s}
+@keyframes bounce{0%,80%,100%{transform:translateY(0);opacity:0.3}40%{transform:translateY(-4px);opacity:1}}
+.chat-input-area{border-top:1px solid var(--border);padding:10px 12px;display:flex;gap:8px;align-items:flex-end;}
+textarea.chat-ta{flex:1;background:var(--s2);border:1px solid var(--border);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:300;border-radius:7px;padding:8px 10px;outline:none;resize:none;min-height:36px;max-height:90px;line-height:1.5;transition:border-color 0.15s;}
+textarea.chat-ta:focus{border-color:rgba(77,158,255,0.35);}textarea.chat-ta::placeholder{color:var(--dim);}
+.btn-send{width:34px;height:34px;flex-shrink:0;border-radius:7px;background:var(--info);color:#fff;border:none;cursor:pointer;font-size:14px;font-weight:bold;transition:all 0.15s;display:flex;align-items:center;justify-content:center;}
+.btn-send:hover:not(:disabled){background:#6bb5ff;transform:scale(1.05);}
+.btn-send:disabled{background:var(--s3);color:var(--dim);cursor:not-allowed;}
+.quick-chips{padding:8px 12px 0;display:flex;gap:6px;flex-wrap:wrap;}
+.qc{padding:4px 10px;border-radius:100px;font-size:10px;font-family:'IBM Plex Mono',monospace;border:1px solid var(--border2);background:var(--s2);color:var(--mid);cursor:pointer;transition:all 0.15s;}
+.qc:hover{border-color:var(--info);color:var(--info);background:rgba(77,158,255,0.06);}
+.btn-exp{padding:5px 13px;border-radius:6px;background:rgba(0,200,150,0.1);border:1px solid rgba(0,200,150,0.25);color:var(--ok);font-family:'IBM Plex Mono',monospace;font-size:10px;cursor:pointer;transition:all 0.15s;}
+.btn-exp:hover{background:rgba(0,200,150,0.18);}
+#results{display:none;}
+@media(max-width:860px){.upload-grid,.analysis-grid,.kpi-row{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <div class="h-left">
+    <div class="h-eyebrow">Inventario · Por Centro · Exportable</div>
+    <h1>OBSOLESCENCIA <span>VS</span> FORECAST</h1>
+  </div>
+  <div class="h-right">
+    <div class="hbadge vida">⏱ Vida útil: 12 meses</div>
+    <div class="hbadge freq">📅 Sell In mensual</div>
+  </div>
+</header>
+
+<div class="upload-grid" style="grid-template-columns:1fr;">
+  <div class="upload-card" id="cardInv">
+    <input type="file" id="fileInv" accept=".csv,.xlsx,.xls">
+    <div class="uc-top"><div class="uc-icon">📦</div><div class="uc-label"><h3>Archivo de Inventario</h3><p>CSV / XLSX / XLS</p></div></div>
+    <div class="uc-hint">Columnas: <strong>SKU · Stock · Fecha vencimiento · Costo unitario · Centro · Sell In · DOH · Marca · Descripción</strong><br><span style="color:var(--purple)">Lotes múltiples por SKU se consolidan automáticamente (fecha = prom. ponderado por stock)</span></div>
+    <div id="mapInv" style="display:none">
+      <div style="font-size:10px;color:var(--dim);font-family:'IBM Plex Mono',monospace;letter-spacing:1px;margin:8px 0 6px;">MAPEAR COLUMNAS</div>
+      <div class="map-row"><div><div class="map-label">SKU / Código</div><select class="map-sel" id="inv_sku"></select></div><div class="map-arrow">→</div><div><div class="map-label">Stock actual</div><select class="map-sel" id="inv_stock"></select></div></div>
+      <div class="map-row"><div><div class="map-label">Fecha vencimiento</div><select class="map-sel" id="inv_fecha"></select></div><div class="map-arrow">→</div><div><div class="map-label">Costo unitario</div><select class="map-sel" id="inv_costo"></select></div></div>
+      <div class="map-row"><div><div class="map-label">⚡ Centro</div><select class="map-sel" id="inv_centro"></select></div><div class="map-arrow">→</div><div><div class="map-label">📈 Sell In (prom. mensual)</div><select class="map-sel" id="inv_sellin"></select></div></div>
+      <div class="map-row"><div><div class="map-label">📊 DOH (columna directa)</div><select class="map-sel" id="inv_doh"></select></div><div class="map-arrow">→</div><div><div class="map-label">🏷️ Marca (opcional)</div><select class="map-sel" id="inv_marca"></select></div></div>
+      <div style="margin-top:6px"><div class="map-label">Descripción (opcional)</div><select class="map-sel" id="inv_desc"></select></div>
+    </div>
+    <div class="uc-status" id="statusInv"><div class="uc-dot"></div><span id="statusInvTxt">—</span></div>
+  </div>
+</div>
+
+<div class="run-bar">
+  <button class="btn-run" id="btnRun" disabled>⚡ CALCULAR OBSOLESCENCIA</button>
+  <button class="btn-excel" id="btnExcel">📗 EXPORTAR LIBRO EXCEL</button>
+</div>
+
+<div id="results">
+  <div class="kpi-row" id="kpiRow"></div>
+
+  <div class="analysis-grid">
+    <div class="panel d1"><div class="panel-head"><div class="panel-title">Monto en riesgo por SKU (Top 15)</div></div><div class="panel-body"><canvas id="chartBar" height="240"></canvas></div></div>
+    <div class="panel d2"><div class="panel-head"><div class="panel-title">Distribución por estado</div></div><div class="panel-body" style="display:flex;align-items:center;justify-content:center"><canvas id="chartDough" height="240" style="max-width:260px"></canvas></div></div>
+  </div>
+
+  <!-- DOH CHART -->
+  <div class="panel" style="margin-bottom:24px;animation:fadeUp 0.4s ease 0.25s both;">
+    <div class="panel-head">
+      <div class="panel-title">Exceso de Inventario por DOH — Days on Hand</div>
+      <div style="display:flex;gap:12px;font-size:10px;font-family:'IBM Plex Mono',monospace">
+        <span style="color:#00c896">■ Sano ≤90</span>
+        <span style="color:#ffb547">■ Riesgo 90–110</span>
+        <span style="color:#ff4d6d">■ Crítico >110</span>
+      </div>
+    </div>
+    <div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:9px;color:var(--dim);font-family:'IBM Plex Mono',monospace;letter-spacing:1px;flex-shrink:0">CENTRO:</span>
+      <div id="dohCentroChips" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+      <div style="width:1px;height:16px;background:var(--border2);flex-shrink:0;margin:0 2px"></div>
+      <span style="font-size:9px;color:var(--dim);font-family:'IBM Plex Mono',monospace;letter-spacing:1px;flex-shrink:0">MARCA:</span>
+      <div id="dohMarcaChips" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+      <div style="width:1px;height:16px;background:var(--border2);flex-shrink:0;margin:0 2px"></div>
+      <span style="font-size:9px;color:var(--dim);font-family:'IBM Plex Mono',monospace;letter-spacing:1px;flex-shrink:0">ZONA:</span>
+      <button class="centro-chip all-c active" id="dohZAll"  data-dz="all"  onclick="setDohZ(this)">Todas</button>
+      <button class="centro-chip"              id="dohZSano" data-dz="sano" onclick="setDohZ(this)" style="border-color:rgba(0,200,150,0.3);color:#00c896">🟢 Sano ≤90</button>
+      <button class="centro-chip"              id="dohZRisk" data-dz="risk" onclick="setDohZ(this)" style="border-color:rgba(255,181,71,0.3);color:#ffb547">🟡 Riesgo 90–110</button>
+      <button class="centro-chip"              id="dohZCrit" data-dz="crit" onclick="setDohZ(this)" style="border-color:rgba(255,77,109,0.3);color:#ff4d6d">🔴 Crítico >110</button>
+    </div>
+    <div class="panel-body" style="padding:16px 16px 8px">
+      <canvas id="chartDoh" height="220"></canvas>
+    </div>
+    <div id="dohKpis" style="display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1px solid var(--border)">
+      <div style="padding:12px 16px;border-right:1px solid var(--border)">
+        <div style="font-size:9px;color:var(--dim);font-family:'IBM Plex Mono',monospace;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Sano ≤90 DOH</div>
+        <div id="dohKpi0" style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:#00c896">—</div>
+        <div id="dohKpi0s" style="font-size:11px;color:var(--mid)">SKUs</div>
+      </div>
+      <div style="padding:12px 16px;border-right:1px solid var(--border)">
+        <div style="font-size:9px;color:var(--dim);font-family:'IBM Plex Mono',monospace;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Riesgo 90–110 DOH</div>
+        <div id="dohKpi1" style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:#ffb547">—</div>
+        <div id="dohKpi1s" style="font-size:11px;color:var(--mid)">SKUs</div>
+      </div>
+      <div style="padding:12px 16px;">
+        <div style="font-size:9px;color:var(--dim);font-family:'IBM Plex Mono',monospace;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Crítico >110 DOH</div>
+        <div id="dohKpi2" style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:#ff4d6d">—</div>
+        <div id="dohKpi2s" style="font-size:11px;color:var(--mid)">SKUs</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="centro-section">
+    <div class="section-head">
+      <div class="section-title">📊 Comparativo por Centro</div>
+      <button class="btn-exp" id="btnExpCentro">⬇ CSV centros</button>
+    </div>
+    <div class="tbl-scroll">
+      <table class="ctbl">
+        <thead><tr><th>Centro</th><th>SKUs</th><th>🔴 Obsoletos</th><th>🟡 En riesgo</th><th>🟢 Cubiertos</th><th>Valor Inventario</th><th>Monto en Riesgo</th><th>% Exposición</th><th>Qty Obsoleta</th><th>Exposición relativa</th></tr></thead>
+        <tbody id="centroTbody"></tbody>
+        <tfoot id="centroFoot"></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div class="detail-section">
+    <div class="section-head">
+      <div class="section-title">Detalle por SKU</div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+        <div class="filter-row">
+          <button class="filter-btn a-all" data-f="all">Todos</button>
+          <button class="filter-btn" data-f="danger">🔴 Obsoleto</button>
+          <button class="filter-btn" data-f="warn">🟡 En riesgo</button>
+          <button class="filter-btn" data-f="ok">🟢 Cubierto</button>
+          <div class="sep"></div>
+          <button class="btn-exp" id="btnExpDetalle">⬇ CSV detalle</button>
+        </div>
+        <div class="filter-row" id="centroChips"></div>
+        <div class="filter-row" id="qChips"></div>
+      </div>
+    </div>
+    <div class="tbl-scroll max-h">
+      <table class="rtbl">
+        <thead><tr>
+          <th data-col="centro">Centro ↕</th><th data-col="sku">SKU ↕</th><th data-col="lotes">Lotes ↕</th><th data-col="desc">Descripción</th>
+          <th data-col="stock">Stock ↕</th><th data-col="mesesRest">Meses Rest. ↕</th><th data-col="trimestreCorta">Trimestre Corta Vida ↕</th><th data-col="fc12">FC 12m ↕</th>
+          <th data-col="exceso">Exceso ↕</th><th data-col="qtyObsoleta">Qty Obs ↕</th><th data-col="montoRiesgo">Monto ↕</th><th data-col="estado">Estado</th>
+        </tr></thead>
+        <tbody id="resTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="chat-section">
+    <div class="chat-head"><div class="alive-dot"></div><div class="chat-head-title">Agente IA — Análisis por Centro</div></div>
+    <div class="quick-chips">
+      <button class="qc" data-p="¿Qué centro tiene mayor monto en riesgo? Dame el detalle.">Centro más expuesto</button>
+      <button class="qc" data-p="Compara el porcentaje de exposición a obsolescencia entre todos los centros.">Comparar centros</button>
+      <button class="qc" data-p="¿Cuáles son los 5 SKUs con mayor monto en riesgo y en qué centro están?">Top 5 SKUs</button>
+      <button class="qc" data-p="Dame recomendaciones específicas por centro para reducir obsolescencia.">Plan por centro</button>
+    </div>
+    <div class="chat-msgs" id="chatMsgs">
+      <div class="msg agent" id="welcomeMsg"><div class="msg-who">AGENTE</div><div class="bub">Ejecuta el cálculo para activarme. Luego podrás preguntarme sobre obsolescencia por centro y exportar el libro Excel completo.</div></div>
+    </div>
+    <div class="chat-input-area">
+      <textarea class="chat-ta" id="chatInput" rows="1" placeholder="Pregunta sobre centros, SKUs o estrategias…" disabled></textarea>
+      <button class="btn-send" id="btnSend" disabled>↑</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────
+let invData=[],invHeaders=[];
+let results=[],chatHistory=[],isLoading=false;
+let sortCol='montoRiesgo',sortDir=-1,filterE='all',filterC='all',filterQ='all',filterDohC='all',filterDohM='all',filterDohZ='all';
+let chartBar=null,chartDough=null,chartDoh=null;
+const NOW=new Date();
+function toQuarter(d){
+  if(!d) return null;
+  const q=Math.ceil((d.getMonth()+1)/3);
+  return 'Q'+q+'-'+d.getFullYear();
+}
+
+// ── FILE SETUP ─────────────────────────────────────────────────
+function setupUpload(inId,cardId,mapId,stId,stTxtId,hRef,dRef,cb){
+  const inp=document.getElementById(inId),card=document.getElementById(cardId);
+  card.addEventListener('dragover',e=>{e.preventDefault();card.classList.add('over');});
+  card.addEventListener('dragleave',()=>card.classList.remove('over'));
+  card.addEventListener('drop',e=>{e.preventDefault();card.classList.remove('over');if(e.dataTransfer.files[0])go(e.dataTransfer.files[0]);});
+  inp.addEventListener('change',e=>{if(e.target.files[0])go(e.target.files[0]);});
+  function go(f){
+    const ext=f.name.split('.').pop().toLowerCase();
+    if(ext==='csv'){const r=new FileReader();r.onload=e=>done(Papa.parse(e.target.result,{header:true,skipEmptyLines:true}).data,f.name);r.readAsText(f);}
+    else{const r=new FileReader();r.onload=e=>{const wb=XLSX.read(e.target.result,{type:'arraybuffer'});done(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''}),f.name);};r.readAsArrayBuffer(f);}
+  }
+  function done(data,name){
+    dRef.length=0;data.forEach(r=>dRef.push(r));
+    hRef.length=0;Object.keys(data[0]||{}).forEach(h=>hRef.push(h));
+    card.classList.add('loaded');
+    document.getElementById(mapId).style.display='block';
+    document.getElementById(stId).style.display='flex';
+    document.getElementById(stTxtId).textContent=`${name} — ${data.length} filas`;
+    document.querySelectorAll(`#${mapId} select`).forEach(sel=>{
+      sel.innerHTML='<option value="">— selecciona —</option>'+hRef.map(h=>`<option value="${h}" ${am(sel.id,h)?'selected':''}>${h}</option>`).join('');
+    });
+    cb();
+  }
+}
+function am(id,col){
+  const c=col.toLowerCase();
+  const m={inv_sku:['sku','codigo','code','item','articulo','part'],inv_stock:['stock','cantidad','qty','existencia','on hand'],inv_fecha:['vencimiento','expir','caducidad','expiry','expire','vence','vto','exp date','fecha venc'],inv_costo:['costo','cost','precio','price','unit'],inv_sellin:['sell in','sellin','sell_in','promedio','prom','average','avg','consumo mensual','forecast mensual','demand'],inv_doh:['doh','days on hand','dias de inventario','dias inv','rotacion dias','day on hand'],inv_marca:['marca','brand','fabricante','manufacturer','proveedor','supplier','make'],inv_desc:['desc','nombre','name','producto','material','descripcion'],inv_centro:['centro','plant','planta','almacen','warehouse','location','ubicacion','site','bodega']};
+  return(m[id]||[]).some(k=>c.includes(k));
+}
+setupUpload('fileInv','cardInv','mapInv','statusInv','statusInvTxt',invHeaders,invData,checkReady);
+function checkReady(){document.getElementById('btnRun').disabled=!invData.length;}
+
+// ── ANALYSIS ───────────────────────────────────────────────────
+document.getElementById('btnRun').addEventListener('click',run);
+function gv(id){return document.getElementById(id).value;}
+
+function run(){
+  const iSku=gv('inv_sku'),iStock=gv('inv_stock'),iFecha=gv('inv_fecha'),iCosto=gv('inv_costo'),iDesc=gv('inv_desc'),iCentro=gv('inv_centro'),iMarca=gv('inv_marca');
+  const iSellin=gv('inv_sellin'),iDoh=gv('inv_doh');
+  if(!iSku||!iStock||!iSellin){alert('Mapea al menos: SKU, Stock y Sell In.');return;}
+
+  // ── PASO 1: parsear fecha de cada lote ──────────────────────
+  function parseDate(raw){
+    if(!raw) return null;
+    let d;
+    if(typeof raw==='number') d=new Date((raw-25569)*86400*1000);
+    else d=new Date(raw);
+    return isNaN(d)?null:d;
+  }
+
+  // ── PASO 2: consolidar lotes por CENTRO+SKU ──────────────────
+  // fecha venc consolidada = promedio ponderado por stock
+  // costo consolidado = promedio ponderado por stock
+  const loteMap={};
+  invData.forEach(row=>{
+    const sku=String(row[iSku]||'').trim().toUpperCase();
+    const centro=iCentro?String(row[iCentro]||'SIN CENTRO').trim().toUpperCase():'SIN CENTRO';
+    const key=centro+'||'+sku;
+    const stock=parseFloat(row[iStock])||0;
+    const costo=parseFloat(row[iCosto])||0;
+    const desc=iDesc?String(row[iDesc]||''):'';
+    const fechaLote=iFecha?parseDate(row[iFecha]):null;
+    const sellin=parseFloat(row[iSellin])||0;
+    const dohLote=iDoh?parseFloat(row[iDoh])||0:0;
+    const marca=iMarca?String(row[iMarca]||'').trim().toUpperCase():'';
+    if(!loteMap[key]) loteMap[key]={sku,centro,desc,marca,totalStock:0,sumCostoXStock:0,sumFechaXStock:0,fechasCount:0,sumSellin:0,sumDoh:0,lotes:0};
+    const e=loteMap[key];
+    e.totalStock+=stock;
+    e.sumCostoXStock+=costo*stock;
+    e.sumSellin+=sellin; // suma sell in de todos los lotes del SKU+centro
+    e.sumDoh+=dohLote;    // suma DOH de todos los lotes del SKU+centro
+    if(marca&&!e.marca) e.marca=marca;
+    e.lotes++;
+    if(desc&&!e.desc) e.desc=desc;
+    if(fechaLote){
+      // accumulate timestamp * stock for weighted average
+      e.sumFechaXStock+=fechaLote.getTime()*stock;
+      e.fechasCount+=stock; // weight = stock units
+    }
+  });
+
+  // ── PASO 3: calcular obsolescencia por SKU consolidado ───────
+  results=Object.values(loteMap).map(e=>{
+    const{sku,centro,desc,marca,totalStock,sumCostoXStock,sumFechaXStock,fechasCount,sumSellin,sumDoh,lotes}=e;
+    const stock=totalStock;
+    const costo=stock>0?sumCostoXStock/stock:0; // costo promedio ponderado por stock
+
+    // fecha venc = promedio ponderado por stock entre lotes
+    let fechaVenc=null, mesesRest=12, vencido=false;
+    if(fechasCount>0){
+      fechaVenc=new Date(sumFechaXStock/fechasCount);
+      const diffMs=fechaVenc-NOW;
+      mesesRest=diffMs/(1000*60*60*24*30.44);
+      vencido=mesesRest<0;
+      mesesRest=Math.max(0,mesesRest);
+    }
+
+    const avgMensual=lotes>0?sumSellin/lotes:0; // promedio de sell in entre lotes
+    const fc12=avgMensual*12;
+    const qtyObsoleta=Math.max(0,stock-(avgMensual*mesesRest));
+    const exceso=stock-fc12;
+    const montoRiesgo=qtyObsoleta*costo;
+    let estado;
+    if(vencido) estado='danger';
+    else if(mesesRest<=3&&qtyObsoleta>0) estado='danger';
+    else if(qtyObsoleta>0) estado='warn';
+    else estado='ok';
+    // Fecha en que entra a corta vida = vencimiento - 12 meses
+    const fechaCorta = fechaVenc ? new Date(fechaVenc.getTime() - 365.25*24*60*60*1000) : null;
+    const yaEnCorta  = fechaCorta ? fechaCorta <= NOW : false;
+    const trimestreCorta = fechaCorta ? toQuarter(fechaCorta) : null;
+    const doh = sumDoh; // suma de DOH de todos los lotes del SKU+centro
+    return{sku,desc,marca:marca||'',centro,stock,fechaVenc,fechaCorta,yaEnCorta,trimestreCorta,mesesRest,vencido,avgMensual,fc12,exceso,qtyObsoleta,costo,montoRiesgo,estado,lotes,doh};
+  });
+
+  // ── ANONIMIZACIÓN: sustituir descripciones por productos ficticios ──
+  // Genera un nombre inventado por SKU único (consistente entre centros)
+  const _adj=['Ultra','Max','Plus','Pro','Select','Prime','Gold','Fresh','Pure','Elite','Active','Natural','Classic','Smooth','Bold','Light','Rich','Soft','Super','Quick'];
+  const _noun=['Formula','Blend','Mix','Series','Pack','Line','Base','Core','Set','Kit','Range','Edition','Collection','Grade','Type','Batch','Unit','Group','Bundle','Class'];
+  const _cat=['A','B','C','D','E','F','G','H','X','Z'];
+  const _skuDescMap={};
+  let _counter=1;
+  function _fakeDesc(sku){
+    if(_skuDescMap[sku]) return _skuDescMap[sku];
+    // deterministic seed from SKU chars
+    let seed=0;for(let i=0;i<sku.length;i++) seed=(seed*31+sku.charCodeAt(i))>>>0;
+    const adj =_adj[seed%_adj.length];
+    const noun=_noun[Math.floor(seed/_adj.length)%_noun.length];
+    const cat =_cat[Math.floor(seed/(_adj.length*_noun.length))%_cat.length];
+    const num = String(_counter++).padStart(3,'0');
+    _skuDescMap[sku]=adj+' '+noun+' '+cat+'-'+num;
+    return _skuDescMap[sku];
+  }
+  results.forEach(r=>{ r.desc=_fakeDesc(r.sku); });
+
+  document.getElementById('results').style.display='block';
+  document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
+  renderKPIs();renderCharts();renderCentro();buildChips();renderTable();activateChat();
+  document.getElementById('btnExcel').style.display='flex';
+}
+
+// ── UTILS ──────────────────────────────────────────────────────
+function fmt(n,d=0){if(n===null||n===undefined||n==='')return'—';return parseFloat(n).toLocaleString('es',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function fmtM(n){if(!n)return'$0';if(Math.abs(n)>=1e6)return'$'+fmt(n/1e6,1)+'M';if(Math.abs(n)>=1e3)return'$'+fmt(n/1e3,1)+'K';return'$'+fmt(n,0);}
+function md(t){return t.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\n/g,'<br>');}
+
+function centroStats(){
+  const centros=[...new Set(results.map(r=>r.centro))].sort();
+  return centros.map(c=>{
+    const rows=results.filter(r=>r.centro===c);
+    const vi=rows.reduce((s,r)=>s+(r.stock*r.costo),0);
+    const mr=rows.reduce((s,r)=>s+r.montoRiesgo,0);
+    return{centro:c,skus:rows.length,obso:rows.filter(r=>r.estado==='danger').length,warn:rows.filter(r=>r.estado==='warn').length,ok:rows.filter(r=>r.estado==='ok').length,valorInv:vi,montoRiesgo:mr,pct:vi?(mr/vi*100):0,qtyObs:rows.reduce((s,r)=>s+r.qtyObsoleta,0)};
+  });
+}
+
+// ── KPIs ───────────────────────────────────────────────────────
+function renderKPIs(){
+  const mr=results.reduce((s,r)=>s+r.montoRiesgo,0);
+  const vi=results.reduce((s,r)=>s+(r.stock*r.costo),0);
+  const pct=vi?(mr/vi*100):0;
+  const nd=results.filter(r=>r.estado==='danger').length,nw=results.filter(r=>r.estado==='warn').length;
+  const nc=[...new Set(results.map(r=>r.centro))].length;
+  document.getElementById('kpiRow').innerHTML=`
+    <div class="kpi danger"><div class="kpi-label">Monto en Riesgo Total</div><div class="kpi-value">${fmtM(mr)}</div><div class="kpi-sub">${fmt(pct,1)}% del inventario total</div></div>
+    <div class="kpi warn"><div class="kpi-label">SKUs Obsoletos / En riesgo</div><div class="kpi-value">${nd+nw}</div><div class="kpi-sub">de ${results.length} — ${nd} críticos</div></div>
+    <div class="kpi info"><div class="kpi-label">Centros Analizados</div><div class="kpi-value">${nc}</div><div class="kpi-sub">Valor inventario: ${fmtM(vi)}</div></div>
+    <div class="kpi ok"><div class="kpi-label">SKUs Cubiertos</div><div class="kpi-value">${results.filter(r=>r.estado==='ok').length}</div><div class="kpi-sub">Forecast cubre el inventario</div></div>`;
+}
+
+// ── CHARTS ─────────────────────────────────────────────────────
+function renderCharts(){
+  const top15=[...results].filter(r=>r.montoRiesgo>0).sort((a,b)=>b.montoRiesgo-a.montoRiesgo).slice(0,15);
+  if(chartBar)chartBar.destroy();
+  chartBar=new Chart(document.getElementById('chartBar').getContext('2d'),{
+    type:'bar',
+    data:{labels:top15.map(r=>r.centro.slice(0,5)+'·'+r.sku.slice(0,9)),datasets:[{label:'Monto',data:top15.map(r=>r.montoRiesgo),backgroundColor:top15.map(r=>r.estado==='danger'?'rgba(255,77,109,0.8)':r.estado==='warn'?'rgba(255,181,71,0.8)':'rgba(0,200,150,0.8)'),borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#4a5568',font:{family:'IBM Plex Mono',size:9},maxRotation:45},grid:{color:'rgba(255,255,255,0.03)'}},y:{ticks:{color:'#4a5568',font:{family:'IBM Plex Mono',size:9},callback:v=>fmtM(v)},grid:{color:'rgba(255,255,255,0.03)'}}}}
+  });
+  const cD=results.filter(r=>r.estado==='danger').length,cW=results.filter(r=>r.estado==='warn').length,cO=results.filter(r=>r.estado==='ok').length;
+  if(chartDough)chartDough.destroy();
+  chartDough=new Chart(document.getElementById('chartDough').getContext('2d'),{
+    type:'doughnut',
+    data:{labels:['Obsoleto','En riesgo','Cubierto'],datasets:[{data:[cD,cW,cO],backgroundColor:['rgba(255,77,109,0.8)','rgba(255,181,71,0.8)','rgba(0,200,150,0.8)'],borderColor:['rgba(255,77,109,0.3)','rgba(255,181,71,0.3)','rgba(0,200,150,0.3)'],borderWidth:1}]},
+    options:{
+    responsive:true,maintainAspectRatio:false,cutout:'68%',
+    plugins:{
+      legend:{labels:{color:'#718096',font:{family:'IBM Plex Mono',size:10}}},
+      tooltip:{
+        callbacks:{
+          label:(item)=>{
+            const total=item.dataset.data.reduce((a,b)=>a+b,0);
+            const pct=total>0?(item.raw/total*100).toFixed(1):'0.0';
+            return ' '+item.label+': '+item.raw+' SKUs ('+pct+'%)';
+          }
+        }
+      }
+    }
+  },
+  plugins:[{
+    id:'doughCenterText',
+    afterDraw(chart){
+      const{ctx,chartArea:{width,height,left,top}}=chart;
+      const total=chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
+      if(!total) return;
+      ctx.save();
+      const cx=left+width/2, cy=top+height/2;
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.font='bold 22px Bebas Neue,sans-serif';
+      ctx.fillStyle='#cdd5e0';
+      ctx.fillText(total,cx,cy-8);
+      ctx.font='9px IBM Plex Mono,monospace';
+      ctx.fillStyle='#4a5568';
+      ctx.fillText('SKUs',cx,cy+10);
+      ctx.restore();
+    }
+  }]
+  });
+
+  // ── DOH CHART ──────────────────────────────────────────────────
+  buildDohChips();
+  renderDoh();
+}
+
+function setDohZ(btn){
+  filterDohZ=btn.dataset.dz;
+  ['dohZAll','dohZSano','dohZRisk','dohZCrit'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.classList.remove('active');
+    // restore default color per zone
+    if(id==='dohZSano') el.style.cssText='border-color:rgba(0,200,150,0.3);color:#00c896';
+    else if(id==='dohZRisk') el.style.cssText='border-color:rgba(255,181,71,0.3);color:#ffb547';
+    else if(id==='dohZCrit') el.style.cssText='border-color:rgba(255,77,109,0.3);color:#ff4d6d';
+    else el.style.cssText='';
+  });
+  btn.classList.add('active');
+  renderDoh();
+}
+
+function buildDohChips(){
+  // Centro chips
+  const centros=[...new Set(results.map(r=>r.centro))].sort();
+  const cc=document.getElementById('dohCentroChips');
+  cc.innerHTML=`<button class="centro-chip all-c active" data-dc="all">Todos</button>`
+    +centros.map(c=>`<button class="centro-chip" data-dc="${c}">${c}</button>`).join('');
+  cc.querySelectorAll('.centro-chip[data-dc]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      filterDohC=btn.dataset.dc;
+      cc.querySelectorAll('.centro-chip[data-dc]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      renderDoh();
+    });
+  });
+  // Marca chips
+  const marcas=[...new Set(results.map(r=>r.marca).filter(Boolean))].sort();
+  const mc=document.getElementById('dohMarcaChips');
+  if(!marcas.length){mc.innerHTML='<span style="font-size:10px;color:var(--dim);font-family:IBM Plex Mono,monospace">—</span>';return;}
+  mc.innerHTML=`<button class="centro-chip all-c active" data-dm="all">Todas</button>`
+    +marcas.map(m=>`<button class="centro-chip" data-dm="${m}">${m}</button>`).join('');
+  mc.querySelectorAll('.centro-chip[data-dm]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      filterDohM=btn.dataset.dm;
+      mc.querySelectorAll('.centro-chip[data-dm]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      renderDoh();
+    });
+  });
+}
+
+function renderDoh(){
+  const filtered = results.filter(r=>{
+    if(r.doh <= 0) return false;
+    if(filterDohC!=='all' && r.centro!==filterDohC) return false;
+    if(filterDohM!=='all' && r.marca!==filterDohM) return false;
+    if(filterDohZ==='sano' && r.doh>90) return false;
+    if(filterDohZ==='risk' && (r.doh<=90||r.doh>110)) return false;
+    if(filterDohZ==='crit' && r.doh<=110) return false;
+    return true;
+  });
+  const dohRows = filtered
+    .map(r => ({
+      label: r.centro + ' · ' + (r.desc||r.sku),
+      labelShort: r.centro.slice(0,5)+'·'+(r.desc||r.sku).slice(0,14),
+      doh: Math.round(r.doh),
+      stock: r.stock,
+      avgMensual: r.avgMensual,
+      costo: r.costo,
+      valInv: r.stock * r.costo,
+      centro: r.centro,
+      sku: r.sku,
+      desc: r.desc,
+      marca: r.marca,
+    }))
+    .sort((a,b) => b.doh - a.doh);
+
+  // KPI counters
+  const nSano    = dohRows.filter(d=>d.doh<=90).length;
+  const nRiesgo  = dohRows.filter(d=>d.doh>90&&d.doh<=110).length;
+  const nCritico = dohRows.filter(d=>d.doh>110).length;
+  const valSano  = dohRows.filter(d=>d.doh<=90).reduce((s,d)=>s+d.valInv,0);
+  const valRiesgo= dohRows.filter(d=>d.doh>90&&d.doh<=110).reduce((s,d)=>s+d.valInv,0);
+  const valCrit  = dohRows.filter(d=>d.doh>110).reduce((s,d)=>s+d.valInv,0);
+  document.getElementById('dohKpi0').textContent = nSano;
+  document.getElementById('dohKpi0s').textContent = fmtM(valSano)+' en inventario';
+  document.getElementById('dohKpi1').textContent = nRiesgo;
+  document.getElementById('dohKpi1s').textContent = fmtM(valRiesgo)+' en inventario';
+  document.getElementById('dohKpi2').textContent = nCritico;
+  document.getElementById('dohKpi2s').textContent = fmtM(valCrit)+' en inventario';
+
+  const dohData = dohRows.slice(0, 40);
+  const dohColors = dohData.map(d =>
+    d.doh <= 90  ? 'rgba(0,200,150,0.78)' :
+    d.doh <= 110 ? 'rgba(255,181,71,0.88)' :
+                   'rgba(255,77,109,0.88)'
+  );
+
+  if(chartDoh) chartDoh.destroy();
+  chartDoh = new Chart(document.getElementById('chartDoh').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: dohData.map(d=>d.labelShort),
+      datasets: [{
+        label: 'DOH',
+        data: dohData.map(d=>d.doh),
+        backgroundColor: dohColors,
+        borderRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: {display:false},
+        tooltip: {
+          callbacks: {
+            title: (items) => dohData[items[0].dataIndex].label,
+            afterTitle: (items) => {
+              const d = dohData[items[0].dataIndex];
+              return 'Stock: '+fmt(d.stock,0)+'  |  Sell In: '+fmt(d.avgMensual,1)+'/mes';
+            },
+            label: (item) => {
+              const d = item.raw;
+              const zona = d<=90?'✅ Sano':d<=110?'⚠️ Riesgo':'🔴 Crítico';
+              return '  '+d+' DOH — '+zona;
+            },
+            afterLabel: (item) => {
+              const d = dohData[item.dataIndex];
+              return '  Valor inv: '+fmtM(d.valInv);
+            }
+          },
+          backgroundColor:'rgba(12,14,16,0.95)',
+          titleColor:'#cdd5e0',
+          bodyColor:'#8c98aa',
+          borderColor:'#272d33',
+          borderWidth:1,
+          padding:10,
+        }
+      },
+      scales: {
+        x: {
+          ticks:{color:'#4a5568',font:{family:'IBM Plex Mono',size:8},maxRotation:60},
+          grid:{color:'rgba(255,255,255,0.02)'}
+        },
+        y: {
+          ticks:{color:'#4a5568',font:{family:'IBM Plex Mono',size:9},callback:v=>v+' d'},
+          grid:{color:'rgba(255,255,255,0.03)'},
+          min: 0,
+        }
+      }
+    },
+    plugins: [{
+      id: 'dohLines',
+      afterDraw(chart) {
+        const {ctx, chartArea:{left,right,top,bottom}, scales:{y}} = chart;
+        [[90,'rgba(255,181,71,0.7)','90 DOH — Sano'],[110,'rgba(255,77,109,0.7)','110 DOH — Crítico']].forEach(([val,col,lbl])=>{
+          const yPos = y.getPixelForValue(val);
+          if(yPos < top || yPos > bottom) return;
+          ctx.save();
+          ctx.setLineDash([6,4]);
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(left, yPos);
+          ctx.lineTo(right, yPos);
+          ctx.stroke();
+          ctx.restore();
+          ctx.save();
+          ctx.font = 'bold 9px IBM Plex Mono';
+          ctx.fillStyle = col;
+          ctx.fillText(lbl, right - 110, yPos - 4);
+          ctx.restore();
+        });
+      }
+    }]
+  });
+}
+
+// ── CENTRO TABLE ───────────────────────────────────────────────
+function renderCentro(){
+  const stats=centroStats().sort((a,b)=>b.montoRiesgo-a.montoRiesgo);
+  const maxM=Math.max(...stats.map(s=>s.montoRiesgo),1);
+  const tV=stats.reduce((s,c)=>s+c.valorInv,0),tM=stats.reduce((s,c)=>s+c.montoRiesgo,0);
+  const tObs=stats.reduce((s,c)=>s+c.qtyObs,0),tSku=stats.reduce((s,c)=>s+c.skus,0),gPct=tV?(tM/tV*100):0;
+
+  document.getElementById('centroTbody').innerHTML=stats.map(s=>{
+    const bw=Math.round(s.montoRiesgo/maxM*100);
+    const bc=s.pct>30?'#ff4d6d':s.pct>15?'#ffb547':'#00c896';
+    return`<tr>
+      <td class="c-name">🏭 ${s.centro}</td><td style="color:var(--text)">${s.skus}</td>
+      <td class="${s.obso>0?'vd':''}">${s.obso}</td><td class="${s.warn>0?'vw':''}">${s.warn}</td><td class="${s.ok>0?'vo':''}">${s.ok}</td>
+      <td>${fmtM(s.valorInv)}</td><td class="${s.montoRiesgo>0?'vd':''}" style="font-weight:500">${fmtM(s.montoRiesgo)}</td>
+      <td><span class="${s.pct>30?'vd':s.pct>15?'vw':'vo'}" style="font-weight:500">${fmt(s.pct,1)}%</span></td>
+      <td>${fmt(s.qtyObs,0)}</td>
+      <td><div style="display:flex;align-items:center;gap:6px"><div class="mini-bar-bg" style="width:80px"><div class="mini-bar-fill" style="width:${bw}%;background:${bc}"></div></div><span style="font-size:10px;color:var(--dim);font-family:'IBM Plex Mono',monospace">${bw}%</span></div></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('centroFoot').innerHTML=`<tr>
+    <td class="c-name" style="color:var(--text)">TOTAL</td><td style="color:var(--text)">${tSku}</td>
+    <td class="vd">${stats.reduce((s,c)=>s+c.obso,0)}</td><td class="vw">${stats.reduce((s,c)=>s+c.warn,0)}</td><td class="vo">${stats.reduce((s,c)=>s+c.ok,0)}</td>
+    <td>${fmtM(tV)}</td><td class="vd" style="font-weight:700">${fmtM(tM)}</td>
+    <td class="${gPct>30?'vd':gPct>15?'vw':'vo'}" style="font-weight:700">${fmt(gPct,1)}%</td><td>${fmt(tObs,0)}</td><td>—</td>
+  </tr>`;
+}
+
+// ── CHIPS ──────────────────────────────────────────────────────
+function buildChips(){
+  // Centro chips
+  const centros=[...new Set(results.map(r=>r.centro))].sort();
+  const wrap=document.getElementById('centroChips');
+  wrap.innerHTML=`<button class="centro-chip all-c active" data-c="all">Todos los centros</button>`+centros.map(c=>`<button class="centro-chip" data-c="${c}">🏭 ${c}</button>`).join('');
+  wrap.querySelectorAll('.centro-chip').forEach(btn=>{
+    btn.addEventListener('click',()=>{filterC=btn.dataset.c;wrap.querySelectorAll('.centro-chip').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderTable();});
+  });
+
+  // Q chips — collect unique trimestres, sort chronologically
+  const qs=[...new Set(results.map(r=>r.trimestreCorta).filter(Boolean))].sort((a,b)=>{
+    // sort by year then quarter: "Q3-2026" -> [2026,3]
+    const parse=s=>{const[q,y]=s.split('-');return parseInt(y)*10+parseInt(q[1]);};
+    return parse(a)-parse(b);
+  });
+  const qwrap=document.getElementById('qChips');
+  const hasYaEnCorta=results.some(r=>r.yaEnCorta);
+  qwrap.innerHTML=
+    `<span style="font-size:9px;color:var(--dim);font-family:'IBM Plex Mono',monospace;letter-spacing:1px;align-self:center">CORTA VIDA:</span>`+
+    `<button class="centro-chip all-c active" data-q="all">Todos los Q</button>`+
+    (hasYaEnCorta?`<button class="centro-chip" data-q="YA EN CORTA" style="border-color:rgba(255,77,109,0.4);color:var(--danger)">🔴 Ya en corta</button>`:'')+
+    qs.map(q=>`<button class="centro-chip" data-q="${q}">📅 ${q}</button>`).join('');
+  qwrap.querySelectorAll('.centro-chip[data-q]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      filterQ=btn.dataset.q;
+      qwrap.querySelectorAll('.centro-chip[data-q]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      renderTable();
+    });
+  });
+}
+
+// ── DETAIL TABLE ───────────────────────────────────────────────
+function renderTable(){
+  const sorted=[...results].sort((a,b)=>{
+    const va=a[sortCol],vb=b[sortCol];
+    if(va===null&&vb===null)return 0;if(va===null)return 1;if(vb===null)return-1;
+    return sortDir*(va>vb?1:va<vb?-1:0);
+  });
+  const filtered=sorted.filter(r=>{
+    if(filterE!=='all'&&r.estado!==filterE) return false;
+    if(filterC!=='all'&&r.centro!==filterC) return false;
+    if(filterQ!=='all'){
+      if(filterQ==='YA EN CORTA') return r.yaEnCorta;
+      return r.trimestreCorta===filterQ;
+    }
+    return true;
+  });
+  document.getElementById('resTbody').innerHTML=filtered.map(r=>`<tr>
+    <td class="vp" style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500">${r.centro}</td>
+    <td style="font-family:'IBM Plex Mono',monospace;color:var(--text);font-size:11px">${r.sku}</td>
+    <td style="text-align:center;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mid)">${r.lotes>1?'<span style=\"background:rgba(181,123,255,0.15);color:var(--purple);padding:1px 7px;border-radius:100px;font-size:10px\">'+r.lotes+' lotes</span>':'1'}</td>
+    <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis" title="${r.desc}">${r.desc||'—'}</td>
+    <td>${fmt(r.stock,0)}</td>
+    <td class="${r.vencido?'vd':r.mesesRest<=3?'vd':r.mesesRest<=6?'vw':''}">${r.fechaVenc?r.fechaVenc.toLocaleDateString('es-MX')+' ('+fmt(r.mesesRest,1)+'m)':'—'}</td>
+    <td style="font-family:'IBM Plex Mono',monospace;font-size:11px;text-align:center">${
+      r.trimestreCorta===null ? '—' :
+      r.yaEnCorta ? '<span style=\"background:rgba(255,77,109,0.15);color:var(--danger);padding:2px 8px;border-radius:5px;font-size:11px;font-weight:500\">YA EN CORTA</span>' :
+      '<span style=\"background:rgba(77,158,255,0.1);color:var(--info);padding:2px 8px;border-radius:5px;font-size:11px;font-weight:500\">'+r.trimestreCorta+'</span>'
+    }</td>
+    <td class="vi">${fmt(r.fc12,0)}</td>
+    <td class="${r.exceso>0?'vw':''}">${fmt(r.exceso,0)}</td>
+    <td class="${r.qtyObsoleta>0?'vd':''}">${fmt(r.qtyObsoleta,0)}</td>
+    <td class="${r.montoRiesgo>0?'vd':''}" style="font-weight:500">${r.montoRiesgo>0?fmtM(r.montoRiesgo):'—'}</td>
+    <td><span class="pill ${r.estado}">${r.estado==='danger'?'🔴 Obsoleto':r.estado==='warn'?'🟡 En riesgo':'🟢 Cubierto'}</span></td>
+  </tr>`).join('');
+}
+
+document.querySelectorAll('.rtbl th[data-col]').forEach(th=>{
+  th.addEventListener('click',()=>{if(sortCol===th.dataset.col)sortDir*=-1;else{sortCol=th.dataset.col;sortDir=-1;}renderTable();});
+});
+document.querySelectorAll('.filter-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{filterE=btn.dataset.f;document.querySelectorAll('.filter-btn').forEach(b=>b.className='filter-btn');btn.classList.add('a-'+filterE);renderTable();});
+});
+
+// ── CSV EXPORTS ────────────────────────────────────────────────
+function dlCsv(rows,fname){
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(rows.map(r=>r.join(',')).join('\n'));
+  a.download=fname;a.click();
+}
+document.getElementById('btnExpCentro').addEventListener('click',()=>{
+  const stats=centroStats();
+  const rows=[['Centro','SKUs','Obsoletos','En_riesgo','Cubiertos','Valor_inventario','Monto_riesgo','Pct_exposicion','Qty_obsoleta']];
+  stats.forEach(s=>rows.push([s.centro,s.skus,s.obso,s.warn,s.ok,s.valorInv.toFixed(2),s.montoRiesgo.toFixed(2),s.pct.toFixed(1)+'%',s.qtyObs.toFixed(0)]));
+  dlCsv(rows,'comparativo_centros.csv');
+});
+document.getElementById('btnExpDetalle').addEventListener('click',()=>{
+  const rows=[['Centro','SKU','Descripcion','Stock','Fecha_vencimiento','Meses_restantes','Fecha_corta_vida','Dias_para_corta_vida','Forecast_12m','Exceso','Qty_obsoleta','Monto_riesgo','Estado']];
+  results.forEach(r=>rows.push([r.centro,r.sku,r.desc,r.stock,r.fechaVenc?r.fechaVenc.toLocaleDateString('es-MX'):'',fmt(r.mesesRest,1),r.fechaCorta?r.fechaCorta.toLocaleDateString('es-MX'):'',r.trimestreCorta?(r.yaEnCorta?'YA EN CORTA':r.trimestreCorta):'',r.fc12.toFixed(0),r.exceso.toFixed(0),r.qtyObsoleta.toFixed(0),r.montoRiesgo.toFixed(2),r.estado==='danger'?'Obsoleto':r.estado==='warn'?'En riesgo':'Cubierto']));
+  dlCsv(rows,'obsolescencia_detalle.csv');
+});
+
+// ══════════════════════════════════════════════════════════════
+// EXPORTAR LIBRO EXCEL — múltiples hojas + hoja de resumen
+// ══════════════════════════════════════════════════════════════
+document.getElementById('btnExcel').addEventListener('click',exportExcel);
+
+function colLetters(n){
+  let s='';
+  while(n>0){s=String.fromCharCode(65+(n-1)%26)+s;n=Math.floor((n-1)/26);}
+  return s;
+}
+
+// --- cell style helpers (XLSX.js SheetJS uses cell styles via xlsx-style, but
+//     plain SheetJS CE supports only data; we'll use HTML table trick for styled output
+//     via sheet_from_array_of_arrays + column widths)
+
+function exportExcel(){
+  const wb = XLSX.utils.book_new();
+  const stats = centroStats().sort((a,b)=>b.montoRiesgo-a.montoRiesgo);
+  const today = new Date().toLocaleDateString('es-MX');
+  const totalMR = results.reduce((s,r)=>s+r.montoRiesgo,0);
+  const totalVI = results.reduce((s,r)=>s+(r.stock*r.costo),0);
+  const totalPct = totalVI?(totalMR/totalVI*100):0;
+  const centros = [...new Set(results.map(r=>r.centro))].sort();
+
+  // ── helper: append AOA to sheet ──
+  function makeSheet(aoa, colWidths){
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = colWidths.map(w=>({wch:w}));
+    return ws;
+  }
+
+  // ─── 1. HOJA RESUMEN ───────────────────────────────────────
+  const resAoa = [];
+  resAoa.push(['ANÁLISIS DE OBSOLESCENCIA VS FORECAST — RESUMEN EJECUTIVO']);
+  resAoa.push([`Vida útil: 12 meses  |  Forecast mensual  |  Fecha: ${today}`]);
+  resAoa.push([]);
+  resAoa.push(['KPI','Valor','Detalle']);
+  resAoa.push(['Monto en Riesgo Total', totalMR, `${totalPct.toFixed(1)}% del inventario`]);
+  resAoa.push(['SKUs Obsoletos / En riesgo', results.filter(r=>r.estado!=='ok').length, `de ${results.length} SKUs — ${results.filter(r=>r.estado==='danger').length} críticos`]);
+  resAoa.push(['Centros Analizados', centros.length, `Valor total inventario: $${totalVI.toFixed(0)}`]);
+  resAoa.push(['SKUs Cubiertos por Forecast', results.filter(r=>r.estado==='ok').length, 'Forecast cubre el inventario en la vida útil']);
+  resAoa.push([]);
+  resAoa.push(['COMPARATIVO POR CENTRO']);
+  resAoa.push(['Centro','SKUs Total','Obsoletos','En Riesgo','Cubiertos','Valor Inventario ($)','Monto en Riesgo ($)','% Exposición','Qty Obsoleta']);
+  stats.forEach(s=>{
+    resAoa.push([s.centro,s.skus,s.obso,s.warn,s.ok,parseFloat(s.valorInv.toFixed(2)),parseFloat(s.montoRiesgo.toFixed(2)),parseFloat(s.pct.toFixed(2)),parseFloat(s.qtyObs.toFixed(0))]);
+  });
+  const totRow = ['TOTAL GLOBAL',
+    stats.reduce((s,c)=>s+c.skus,0),
+    stats.reduce((s,c)=>s+c.obso,0),
+    stats.reduce((s,c)=>s+c.warn,0),
+    stats.reduce((s,c)=>s+c.ok,0),
+    parseFloat(totalVI.toFixed(2)),
+    parseFloat(totalMR.toFixed(2)),
+    parseFloat(totalPct.toFixed(2)),
+    parseFloat(results.reduce((s,r)=>s+r.qtyObsoleta,0).toFixed(0))
+  ];
+  resAoa.push(totRow);
+  resAoa.push([]);
+  resAoa.push(['DISTRIBUCIÓN POR ESTADO']);
+  resAoa.push(['Estado','Cantidad SKUs','% del total']);
+  ['danger','warn','ok'].forEach(e=>{
+    const label=e==='danger'?'Obsoleto':e==='warn'?'En riesgo':'Cubierto';
+    const cnt=results.filter(r=>r.estado===e).length;
+    resAoa.push([label,cnt,parseFloat((cnt/results.length*100).toFixed(1))]);
+  });
+  resAoa.push([]);
+  resAoa.push(['TOP 15 SKUs POR MONTO EN RIESGO']);
+  resAoa.push(['Centro','SKU','Descripción','Stock','Fecha Vencimiento','Meses Restantes','Fecha Corta Vida (12m)','Trimestre Corta Vida','Forecast 12m','Qty Obsoleta','Monto en Riesgo ($)','Estado']);
+  [...results].sort((a,b)=>b.montoRiesgo-a.montoRiesgo).slice(0,15).forEach(r=>{
+    resAoa.push([r.centro,r.sku,r.desc,r.stock,r.fechaVenc?r.fechaVenc.toLocaleDateString('es-MX'):'',parseFloat(r.mesesRest.toFixed(1)),r.fechaCorta?r.fechaCorta.toLocaleDateString('es-MX'):'',r.trimestreCorta?(r.yaEnCorta?'YA EN CORTA':r.trimestreCorta):'',parseFloat(r.avgMensual.toFixed(2)),parseFloat(r.fc12.toFixed(0)),parseFloat(r.qtyObsoleta.toFixed(0)),parseFloat(r.montoRiesgo.toFixed(2)),r.estado==='danger'?'Obsoleto':r.estado==='warn'?'En riesgo':'Cubierto']);
+  });
+
+  const wsRes = makeSheet(resAoa,[28,14,12,12,12,20,20,14,16]);
+  XLSX.utils.book_append_sheet(wb, wsRes, '📊 Resumen');
+
+  // ─── 2. HOJA COMPARATIVO CENTROS ──────────────────────────
+  const cAoa = [];
+  cAoa.push(['COMPARATIVO POR CENTRO DE DISTRIBUCIÓN']);
+  cAoa.push([`Fecha: ${today}  |  Vida útil: 12 meses`]);
+  cAoa.push([]);
+  cAoa.push(['Centro','SKUs Total','Obsoletos 🔴','En Riesgo 🟡','Cubiertos 🟢','Valor Inventario ($)','Monto en Riesgo ($)','% Exposición','Qty Obsoleta','Meses restantes prom. hasta venc.']);
+  stats.forEach(s=>{
+    const rows=results.filter(r=>r.centro===s.centro);
+    const avgMeses=rows.reduce((a,r)=>a+(r.mesesRest||0),0)/rows.length;
+    cAoa.push([s.centro,s.skus,s.obso,s.warn,s.ok,parseFloat(s.valorInv.toFixed(2)),parseFloat(s.montoRiesgo.toFixed(2)),parseFloat(s.pct.toFixed(2)),parseFloat(s.qtyObs.toFixed(0)),parseFloat(avgMeses.toFixed(1))]);
+  });
+  cAoa.push(['TOTAL',stats.reduce((s,c)=>s+c.skus,0),stats.reduce((s,c)=>s+c.obso,0),stats.reduce((s,c)=>s+c.warn,0),stats.reduce((s,c)=>s+c.ok,0),parseFloat(totalVI.toFixed(2)),parseFloat(totalMR.toFixed(2)),parseFloat(totalPct.toFixed(2)),parseFloat(results.reduce((s,r)=>s+r.qtyObsoleta,0).toFixed(0)),'—']);
+  cAoa.push([]);
+  cAoa.push(['RESUMEN ESTADO POR CENTRO']);
+  cAoa.push(['Centro','Obsoleto','En riesgo','Cubierto','% Obsoleto','% En riesgo','% Cubierto']);
+  stats.forEach(s=>{
+    cAoa.push([s.centro,s.obso,s.warn,s.ok,parseFloat((s.obso/s.skus*100).toFixed(1)),parseFloat((s.warn/s.skus*100).toFixed(1)),parseFloat((s.ok/s.skus*100).toFixed(1))]);
+  });
+
+  const wsCentro = makeSheet(cAoa,[22,12,14,14,12,20,20,14,14,20]);
+  XLSX.utils.book_append_sheet(wb, wsCentro, '🏭 Por Centro');
+
+  // ─── 3. HOJA DETALLE COMPLETO ─────────────────────────────
+  const dAoa = [];
+  dAoa.push(['DETALLE COMPLETO POR SKU']);
+  dAoa.push([`Fecha: ${today}  |  Vida útil: 12 meses  |  Forecast mensual`]);
+  dAoa.push([]);
+  dAoa.push(['Centro','SKU','Lotes Consolidados','Descripción','Stock Total','Fecha Venc. Prom.','Meses Restantes','Fecha Corta Vida (12m)','Trimestre Corta Vida','Costo Prom. Pond. ($)','Sell In Mensual','Forecast 12m','Exceso s/Forecast','Qty Obsoleta','Monto en Riesgo ($)','Estado']);
+  [...results].sort((a,b)=>{
+    if(a.centro!==b.centro)return a.centro.localeCompare(b.centro);
+    return b.montoRiesgo-a.montoRiesgo;
+  }).forEach(r=>{
+    dAoa.push([
+      r.centro, r.sku, r.lotes, r.desc,
+      r.stock,
+      r.fechaVenc?r.fechaVenc.toLocaleDateString('es-MX'):'',
+      parseFloat(r.mesesRest.toFixed(1)),
+      r.fechaCorta?r.fechaCorta.toLocaleDateString('es-MX'):'',
+      r.trimestreCorta?(r.yaEnCorta?'YA EN CORTA':r.trimestreCorta):'',
+      parseFloat(r.costo.toFixed(2)),
+      parseFloat(r.avgMensual.toFixed(2)),
+      parseFloat(r.fc12.toFixed(0)),
+      parseFloat(r.exceso.toFixed(0)),
+      parseFloat(r.qtyObsoleta.toFixed(0)),
+      parseFloat(r.montoRiesgo.toFixed(2)),
+      r.estado==='danger'?'Obsoleto':r.estado==='warn'?'En riesgo':'Cubierto'
+    ]);
+  });
+
+  const wsDetalle = makeSheet(dAoa,[18,14,24,10,18,14,14,18,14,14,18,12]);
+  XLSX.utils.book_append_sheet(wb, wsDetalle, '📋 Detalle SKUs');
+
+  // ─── 4. HOJAS POR CENTRO ──────────────────────────────────
+  centros.forEach(c=>{
+    const rows=[...results].filter(r=>r.centro===c).sort((a,b)=>b.montoRiesgo-a.montoRiesgo);
+    const cvi=rows.reduce((s,r)=>s+(r.stock*r.costo),0);
+    const cmr=rows.reduce((s,r)=>s+r.montoRiesgo,0);
+    const cpct=cvi?(cmr/cvi*100):0;
+
+    const cAoaC=[];
+    cAoaC.push([`CENTRO: ${c} — ANÁLISIS DE OBSOLESCENCIA`]);
+    cAoaC.push([`Fecha: ${today}  |  SKUs: ${rows.length}  |  Valor inventario: $${cvi.toFixed(0)}  |  Monto en riesgo: $${cmr.toFixed(0)} (${cpct.toFixed(1)}%)`]);
+    cAoaC.push([]);
+    cAoaC.push(['RESUMEN DEL CENTRO']);
+    cAoaC.push(['Métrica','Valor']);
+    cAoaC.push(['Total SKUs',rows.length]);
+    cAoaC.push(['SKUs Obsoletos',rows.filter(r=>r.estado==='danger').length]);
+    cAoaC.push(['SKUs En riesgo',rows.filter(r=>r.estado==='warn').length]);
+    cAoaC.push(['SKUs Cubiertos',rows.filter(r=>r.estado==='ok').length]);
+    cAoaC.push(['Valor Inventario ($)',parseFloat(cvi.toFixed(2))]);
+    cAoaC.push(['Monto en Riesgo ($)',parseFloat(cmr.toFixed(2))]);
+    cAoaC.push(['% Exposición',parseFloat(cpct.toFixed(2))]);
+    cAoaC.push(['Qty Obsoleta Total',parseFloat(rows.reduce((s,r)=>s+r.qtyObsoleta,0).toFixed(0))]);
+    cAoaC.push([]);
+    cAoaC.push(['DETALLE SKUs — '+c]);
+    cAoaC.push(['SKU','Lotes','Descripción','Stock Total','Fecha Venc. Prom.','Meses Rest.','Fecha Corta Vida','Trimestre Corta Vida','Costo Prom. ($)','Sell In Mensual','Forecast 12m','Exceso','Qty Obsoleta','Monto Riesgo ($)','Estado']);
+    rows.forEach(r=>{
+      cAoaC.push([r.sku,r.lotes,r.desc,r.stock,r.fechaVenc?r.fechaVenc.toLocaleDateString('es-MX'):'',parseFloat(r.mesesRest.toFixed(1)),r.fechaCorta?r.fechaCorta.toLocaleDateString('es-MX'):'',r.trimestreCorta?(r.yaEnCorta?'YA EN CORTA':r.trimestreCorta):'',parseFloat(r.costo.toFixed(2)),parseFloat(r.avgMensual.toFixed(2)),parseFloat(r.fc12.toFixed(0)),parseFloat(r.exceso.toFixed(0)),parseFloat(r.qtyObsoleta.toFixed(0)),parseFloat(r.montoRiesgo.toFixed(2)),r.estado==='danger'?'Obsoleto':r.estado==='warn'?'En riesgo':'Cubierto']);
+    });
+    // totals
+    cAoaC.push(['TOTAL','',rows.reduce((s,r)=>s+r.stock,0),'','',parseFloat(rows.reduce((s,r)=>s+r.fc12,0).toFixed(0)),parseFloat(rows.reduce((s,r)=>s+r.exceso,0).toFixed(0)),parseFloat(rows.reduce((s,r)=>s+r.qtyObsoleta,0).toFixed(0)),'',parseFloat(cmr.toFixed(2)),'']);
+
+    const safeTitle = c.replace(/[\\/?*[\]:]/g,'').slice(0,28);
+    const wsC = makeSheet(cAoaC,[14,22,10,10,12,14,12,14,14,16,12]);
+    XLSX.utils.book_append_sheet(wb, wsC, `🏭 ${safeTitle}`);
+  });
+
+  // ─── 5. HOJA FORECAST CONSUMIDO ───────────────────────────
+  const fAoa=[];
+  fAoa.push(['FORECAST VS STOCK — ANÁLISIS DE COBERTURA']);
+  fAoa.push([`Fecha: ${today}`]);
+  fAoa.push([]);
+  fAoa.push(['SKU','Centro','Stock','Promedio Mensual','Forecast 12m (prom×12)','Cobertura (meses de stock)','Exceso','Déficit']);
+  [...results].sort((a,b)=>a.centro.localeCompare(b.centro)||a.sku.localeCompare(b.sku)).forEach(r=>{
+    const cobertura=r.avgMensual>0?(r.stock/r.avgMensual):null;
+    const deficit=r.fc12>r.stock?(r.fc12-r.stock):0;
+    const ratio=r.avgMensual>0?parseFloat((r.stock/r.avgMensual).toFixed(1)):null; // months of supply
+    fAoa.push([r.sku,r.centro,r.stock,parseFloat(r.avgMensual.toFixed(2)),parseFloat(r.fc12.toFixed(0)),cobertura!==null?parseFloat(cobertura.toFixed(1)):null,parseFloat(Math.max(0,r.exceso).toFixed(0)),parseFloat(deficit.toFixed(0))]);
+  });
+
+  const wsFC = makeSheet(fAoa,[14,16,12,14,18,12,12,16]);
+  XLSX.utils.book_append_sheet(wb, wsFC, '📈 Forecast vs Stock');
+
+  // ─── GUARDAR ──────────────────────────────────────────────
+  XLSX.writeFile(wb, `Obsolescencia_vs_Forecast_${today.replace(/\//g,'-')}.xlsx`);
+}
+
+// ── CHAT ───────────────────────────────────────────────────────
+function activateChat(){
+  document.getElementById('chatInput').disabled=false;
+  document.getElementById('btnSend').disabled=false;
+  const centros=[...new Set(results.map(r=>r.centro))];
+  document.getElementById('welcomeMsg').querySelector('.bub').innerHTML=
+    `✅ Análisis listo: <strong>${results.length} SKUs</strong> en <strong>${centros.length} centros</strong> (${centros.join(' · ')}). También puedes exportar el <strong>libro Excel completo</strong> con el botón verde.`;
+  document.querySelectorAll('.qc').forEach(btn=>{
+    btn.addEventListener('click',()=>{document.getElementById('chatInput').value=btn.dataset.p;sendChat(btn.dataset.p);});
+  });
+}
+
+const chatInput=document.getElementById('chatInput'),btnSend=document.getElementById('btnSend');
+chatInput.addEventListener('input',()=>{chatInput.style.height='auto';chatInput.style.height=Math.min(chatInput.scrollHeight,90)+'px';});
+chatInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(chatInput.value.trim()&&!isLoading)sendChat(chatInput.value.trim());}});
+btnSend.addEventListener('click',()=>{if(chatInput.value.trim()&&!isLoading)sendChat(chatInput.value.trim());});
+
+function addMsg(role,text){const c=document.getElementById('chatMsgs'),el=document.createElement('div');el.className=`msg ${role}`;el.innerHTML=`<div class="msg-who">${role==='user'?'TÚ':'AGENTE'}</div><div class="bub">${md(text)}</div>`;c.appendChild(el);c.scrollTop=c.scrollHeight;return el;}
+function addThinking(){const c=document.getElementById('chatMsgs'),el=document.createElement('div');el.className='msg agent';el.innerHTML=`<div class="msg-who">AGENTE</div><div class="thinking-b">Analizando<div class="dots"><span></span><span></span><span></span></div></div>`;c.appendChild(el);c.scrollTop=c.scrollHeight;return el;}
+
+function buildCtx(){
+  const cs=centroStats().sort((a,b)=>b.montoRiesgo-a.montoRiesgo);
+  const tM=cs.reduce((s,c)=>s+c.montoRiesgo,0),tV=cs.reduce((s,c)=>s+c.valorInv,0);
+  const top10=[...results].sort((a,b)=>b.montoRiesgo-a.montoRiesgo).slice(0,10);
+  return`Eres experto en gestión de inventarios y obsolescencia. Responde en español con datos concretos.
+GLOBAL: ${results.length} SKUs | ${cs.length} centros | Valor:$${tV.toFixed(0)} | Riesgo:$${tM.toFixed(0)} (${tV?(tM/tV*100).toFixed(1):0}%)
+CENTROS: ${cs.map(c=>`${c.centro}→SKUs:${c.skus},🔴${c.obso},🟡${c.warn},🟢${c.ok},Riesgo:$${c.montoRiesgo.toFixed(0)},Exp:${c.pct.toFixed(1)}%`).join(' | ')}
+TOP10: ${top10.map(r=>`[${r.centro}]${r.sku} stock:${r.stock} mesesRest:${r.mesesRest.toFixed(1)} corta:${r.trimestreCorta??(r.yaEnCorta?'YA EN CORTA':'—')} fc12:${r.fc12.toFixed(0)} obs:${r.qtyObsoleta.toFixed(0)} $${r.montoRiesgo.toFixed(0)} ${r.estado}${r.vencido?' VENCIDO':''}`).join(' | ')}
+MUESTRA: ${results.slice(0,50).map(r=>`[${r.centro}]${r.sku}|s:${r.stock}|mRest:${r.mesesRest.toFixed(1)}|avg:${r.avgMensual.toFixed(1)}|fc12:${r.fc12.toFixed(0)}|obs:${r.qtyObsoleta.toFixed(0)}|$${r.montoRiesgo.toFixed(0)}|${r.estado}`).join('\n')}`;
+}
+
+async function sendChat(text){
+  if(!text||isLoading)return;
+  isLoading=true;btnSend.disabled=true;
+  addMsg('user',text);chatInput.value='';chatInput.style.height='auto';
+  const thinkEl=addThinking();
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:buildCtx(),messages:[...chatHistory,{role:'user',content:text}]})});
+    const data=await res.json();
+    if(data.error)throw new Error(data.error.message);
+    const reply=data.content.map(b=>b.text||'').join('');
+    chatHistory.push({role:'user',content:text},{role:'assistant',content:reply});
+    thinkEl.innerHTML=`<div class="msg-who">AGENTE</div><div class="bub">${md(reply)}</div>`;
+  }catch(err){thinkEl.innerHTML=`<div style="color:var(--danger);font-size:12px;padding:8px">⚠️ ${err.message}</div>`;}
+  isLoading=false;btnSend.disabled=false;
+  document.getElementById('chatMsgs').scrollTop=9999;
+}
+</script>
+</body>
+</html>
